@@ -36,10 +36,13 @@ def setup_mlflow():
 def build_pipeline():
     return Pipeline([
         ("tfidf", TfidfVectorizer(
-            max_features=5000,
-            ngram_range=(1, 2)
+            max_features=15000,
+            min_df=3,
+            max_df=0.95,
+            ngram_range=(1, 2),
+            stop_words="english"
         )),
-        ("clf", LinearSVC(class_weight='balanced'))
+        ("clf", LinearSVC(class_weight='balanced',C=1.0))
     ])
 
 

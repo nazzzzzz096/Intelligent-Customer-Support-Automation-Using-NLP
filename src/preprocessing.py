@@ -7,8 +7,21 @@ from sklearn.model_selection import train_test_split
 
 def clean_text(text: str) -> str:
     text = text.lower()
+
+    # Remove URLs
+    text = re.sub(r"http\S+|www\S+|https\S+", " ", text)
+
+    # Remove numbers (optional)
+    text = re.sub(r"\d+", " ", text)
+
+    # Remove punctuation
+    text = re.sub(r"[^\w\s]", " ", text)
+
+    # Remove repeated whitespace
     text = re.sub(r"\s+", " ", text)
+
     return text.strip()
+
 
 
 def load_and_prepare_data(path: str):
