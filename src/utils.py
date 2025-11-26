@@ -17,7 +17,7 @@ def evaluate_model(y_true, y_pred):
 def plot_confusion_matrix(y_true, y_pred, classes):
     cm = confusion_matrix(y_true, y_pred, labels=classes)
 
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(14, 11))
     sns.heatmap(cm, annot=False, cmap="Blues", xticklabels=classes, yticklabels=classes)
     plt.xticks(rotation=90)
     plt.ylabel("True label")
