@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
   pull_request:
-    branches: [ main ]
+    branches: ["main"]
 
 jobs:
   build:
@@ -12,39 +12,24 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
-    - name: Debug workspace tree
-      run: ls -R .
-
-    # ----------------------------------------------------
-    # FIND PROJECT ROOT (folder that contains the `app` directory)
-    # ----------------------------------------------------
-    - name: Detect project root
-      id: findroot
-      run: |
-        ROOT=$(find . -type d -name "app" | head -n 1)
-        ROOT_DIR=$(dirname "$ROOT")
-        echo "root_dir=$ROOT_DIR" >> $GITHUB_OUTPUT
-        echo "Detected project root: $ROOT_DIR"
-
-    - name: Setup Python
-      uses: actions/setup-python@v5
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
         python-version: "3.10"
 
     - name: Install dependencies
       run: |
-        pip install --upgrade pip
-        pip install -r "${{ steps.findroot.outputs.root_dir }}/requirements.txt"
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
         pip install pytest pylint
 
     - name: Run pylint
-      run: |
-        pylint "${{ steps.findroot.outputs.root_dir }}/app" || true
+      run: pylint app || true
 
     - name: Run pytest
-      run: |
-        pytest -v "${{ steps.findroot.outputs.root_dir }}/tests"
+      run: pytest -v
+
 
 
