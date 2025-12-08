@@ -10,21 +10,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/Intelligent-Customer-Support-Automation-Using-NLP
-
     steps:
-    - name: Checkout repo
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Show workspace
+    - name: Debug: show folder layout
       run: ls -R ${{ github.workspace }}
 
-    - name: Set working directory
+    - name: Find project root dynamically
+      id: findroot
       run: |
-        cd ${{ github.workspace }}/Intelligent-Customer-Support-Automation-Using-NLP
-        ls -la
+        ROOT=$(find . -type d -name "app" -printf '%h\n' | head -n 1)
+        echo "root_dir=$ROOT" >> $GITHUB_OUTPUT
+        echo "Detected project root: $ROOT"
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -34,15 +32,15 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pylint pytest
+        pip install -r ${{ steps.findroot.outputs.root_dir }}/requirements.txt
+        pip install pytest pylint
 
-    - name: Lint with pylint
+    - name: Run pylint
       run: |
-        pylint app || true
+        pylint ${{ steps.findroot.outputs.root_dir }}/app || true
 
-    - name: Run tests
+    - name: Run pytest
       run: |
-        pytest -v
+        pytest -v ${{ steps.findroot.outputs.root_dir }}/tests
 
 
