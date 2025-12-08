@@ -1,4 +1,4 @@
-name: Run Tests and Lint
+name: CI - Tests & Lint
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,13 +31,12 @@ jobs:
         echo "TRANSFORMERS_NO_FLAX=1" >> $GITHUB_ENV
         echo "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python" >> $GITHUB_ENV
 
-    - name: Run Pylint
+    - name: Run pylint
       run: |
-        cd Intelligent-Customer-Support-Automation-Using-NLP
         pylint app || true
 
-    - name: Run Tests
+    - name: Run tests
       run: |
-        cd Intelligent-Customer-Support-Automation-Using-NLP
         pytest -v
+
 
