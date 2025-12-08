@@ -29,9 +29,6 @@ jobs:
       run: |
         echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
-    - name: Verify folder structure
-      run: ls -R .
-
     - name: Run pylint
       run: pylint app || true
 
