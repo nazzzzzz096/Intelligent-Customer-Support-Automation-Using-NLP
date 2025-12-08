@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from transformers import pipeline
 from dotenv import load_dotenv
+import boto3
 
 load_dotenv()
 
@@ -35,11 +36,12 @@ if genai and GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     gemini_model = genai.GenerativeModel("gemini-flash-latest")
 
+
 # ------------------------------------------------------
-# MODEL REGISTRY — IMPORTANT FOR TESTING
+# MODEL REGISTRY
 # ------------------------------------------------------
 class ModelRegistry:
-    """Stores loaded ML models."""
+    """Stores loaded ML models used during inference."""
     sentiment = None
     severity = None
     intent = None
@@ -66,46 +68,81 @@ def get_intent(text: str):
     return ModelRegistry.intent(text)
 
 
-def load_models():
-    """
-    Loads local HuggingFace classification models only once.
-    Avoids heavy imports during pytest.
-    """
-    models_dir = "models"
+# ------------------------------------------------------
+# AWS S3 DOWNLOAD UTILS
+# ------------------------------------------------------
+s3 = boto3.client("s3")
 
-    if ModelRegistry.sentiment is None:
-        ModelRegistry.sentiment = pipeline(
-            "text-classification",
-            model=os.path.join(models_dir, "sentiment_model_clean")
-        )
+def download_dir(prefix: str, local_dir: str, bucket: str):
+    """Download all files inside an S3 prefix to a local directory."""
+    paginator = s3.get_paginator("list_objects_v2")
 
-    if ModelRegistry.severity is None:
-        ModelRegistry.severity = pipeline(
-            "text-classification",
-            model=os.path.join(models_dir, "severity_model_clean_k")
-        )
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            relative_path = obj["Key"].replace(prefix, "").lstrip("/")
+            local_path = os.path.join(local_dir, relative_path)
 
-    if ModelRegistry.intent is None:
-        ModelRegistry.intent = pipeline(
-            "text-classification",
-            model=os.path.join(models_dir, "intent_model_clean")
-        )
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            if not os.path.exists(local_path):
+                print(f"⬇ Downloading {obj['Key']} → {local_path}")
+                s3.download_file(bucket, obj["Key"], local_path)
 
 
 # ------------------------------------------------------
-# FASTAPI LIFESPAN
+# MODEL LOADING
+# ------------------------------------------------------
+def load_models():
+    """Loads HuggingFace models, downloading from S3 if needed."""
+
+    # Skip S3 during pytest (CI speed + avoids missing credentials)
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        print("⏭ Skipping S3 download during pytest")
+        ModelRegistry.sentiment = lambda x: [{"label": "TEST_SENT"}]
+        ModelRegistry.severity = lambda x: [{"label": "TEST_SEV"}]
+        ModelRegistry.intent = lambda x: [{"label": "TEST_INT"}]
+        return
+
+    bucket = os.getenv("S3_BUCKET")
+    if not bucket:
+        raise RuntimeError("S3_BUCKET env variable not provided")
+
+    model_paths = {
+        "sentiment": "models/sentiment_model_clean",
+        "severity": "models/severity_model_clean_k",
+        "intent": "models/intent_model_clean",
+    }
+
+    # Download missing models
+    for name, path in model_paths.items():
+        if not os.path.isdir(path):
+            print(f"📥 Downloading {name} model from S3...")
+            download_dir(f"{path}/", path, bucket)
+
+    # Now load them
+    ModelRegistry.sentiment = pipeline("text-classification", model=model_paths["sentiment"])
+    ModelRegistry.severity = pipeline("text-classification", model=model_paths["severity"])
+    ModelRegistry.intent = pipeline("text-classification", model=model_paths["intent"])
+
+
+# ------------------------------------------------------
+# FASTAPI LIFESPAN (Startup)
 # ------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # pylint: disable=unused-argument
     """Application lifecycle: load all models on startup."""
     print("🔥 Loading NLP models...")
     load_models()
-    print("✅ Models loaded.")
+    print("✅ Models loaded successfully.")
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 
+
+# ------------------------------------------------------
+# REQUEST MODEL
+# ------------------------------------------------------
 class InputText(BaseModel):
     """User input schema."""
     text: str
@@ -117,10 +154,9 @@ class InputText(BaseModel):
 @app.post("/analyze")
 async def analyze(data: InputText):
     """
-    Analyze a user's message using sentiment, severity, intent models,
-    and optionally generate a Gemini-based reply.
+    Analyze a user's message using all models + optional Gemini.
     """
-    text = (data.text or "").strip()
+    text = data.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Text cannot be empty")
 
@@ -134,7 +170,7 @@ async def analyze(data: InputText):
         "Please contact verified support channels for more help."
     )
 
-    # Gemini generation
+    # Gemini response generation
     if gemini_model:
         prompt = f"""
 You are an empathetic and safe customer support assistant.
@@ -148,16 +184,16 @@ Severity: {severity}
 Intent: {intent}
 
 RESPONSE RULES:
-- 3–5 sentence reply
-- No URLs, emails, phone numbers, legal/policy instructions
-- No invented details
-- Warm, supportive, professional
+- Provide a 3–5 sentence helpful reply
+- Never include URLs, phone numbers, emails, or legal/policy instructions
+- Do not invent details
+- Friendly, warm, empathetic tone
 """
 
         try:
-            g = gemini_model.generate_content(prompt)
-            if hasattr(g, "text"):
-                reply = g.text
+            response = gemini_model.generate_content(prompt)
+            if hasattr(response, "text"):
+                reply = response.text
         except Exception as exc:  # pylint: disable=broad-except
             print("Gemini error:", exc)
 

@@ -29,6 +29,10 @@ jobs:
       run: |
         echo "PYTHONPATH=$PWD" >> $GITHUB_ENV
 
+    # 🔥 IMPORTANT: Tells your app to skip S3 + model loading
+    - name: Set pytest skip flag
+      run: echo "PYTEST_CURRENT_TEST=1" >> $GITHUB_ENV
+
     - name: Verify folder structure
       run: ls -R .
 
@@ -37,6 +41,5 @@ jobs:
 
     - name: Run pytest
       run: pytest -v
-
 
 
