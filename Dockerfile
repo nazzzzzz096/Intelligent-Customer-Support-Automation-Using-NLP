@@ -1,48 +1,45 @@
-# ============================================================
-# STAGE 1 — Build Dependencies
-# ============================================================
+# ------------------------------
+# Stage 1 — Build dependencies
+# ------------------------------
 FROM python:3.10-slim AS builder
 
 WORKDIR /app
 
-# System dependencies for building some wheels
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt .
 
-# Install dependencies into /wheels
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-RUN pip wheel --no-cache-dir -r requirements.txt -w /wheels
+# Install system deps
+RUN apt-get update && apt-get install -y \
+    git build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
 
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ============================================================
-# STAGE 2 — Final Runtime Image
-# ============================================================
+# ------------------------------
+# Stage 2 — Final runtime image
+# ------------------------------
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy built wheels from builder stage
-COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir /wheels/*
+# Copy installed dependencies
+COPY --from=builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy only the minimal FastAPI app
+# Copy application code
 COPY app ./app
+COPY ui ./ui
+COPY supervisord.conf .
 
-# Create models directory (empty → downloaded at runtime)
+# Create empty models folder
 RUN mkdir -p /app/models
 
-# Environment fixes
-ENV TRANSFORMERS_NO_TF=1
-ENV TRANSFORMERS_NO_FLAX=1
-ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
-
+# Expose backend + frontend ports
 EXPOSE 8000
+EXPOSE 8501
 
-# Start server
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Install supervisor
+RUN apt-get update && apt-get install -y supervisor && rm -rf /var/lib/apt/lists/*
 
+# Start both apps
+CMD ["supervisord", "-c", "supervisord.conf"]
 
