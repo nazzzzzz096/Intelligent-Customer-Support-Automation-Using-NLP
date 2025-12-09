@@ -97,7 +97,7 @@ def load_models():
 
     # Skip S3 during pytest (CI speed + avoids missing credentials)
     if os.getenv("PYTEST_CURRENT_TEST"):
-        print("⏭ Skipping S3 download during pytest")
+        print(" Skipping S3 download during pytest")
         ModelRegistry.sentiment = lambda x: [{"label": "TEST_SENT"}]
         ModelRegistry.severity = lambda x: [{"label": "TEST_SEV"}]
         ModelRegistry.intent = lambda x: [{"label": "TEST_INT"}]
@@ -175,6 +175,14 @@ async def analyze(data: InputText):
         prompt = f"""
 You are an empathetic and safe customer support assistant.
 
+IMPORTANT RULE:
+- If the user asks a question that is NOT related to customer support 
+  (example: general knowledge, people, history, geography, politics, entertainment),
+  DO NOT answer the question.
+  Instead reply:
+  "I'm here to help with customer support–related concerns. 
+   Please let me know how I can assist you regarding an account, service, or issue you're facing."
+
 USER MESSAGE:
 {text}
 
@@ -184,11 +192,12 @@ Severity: {severity}
 Intent: {intent}
 
 RESPONSE RULES:
-- Provide a 3–5 sentence helpful reply
-- Never include URLs, phone numbers, emails, or legal/policy instructions
+- Provide a supportive 3–5 sentence reply
+- Never include URLs, phone numbers, emails, legal/policy guidance
 - Do not invent details
 - Friendly, warm, empathetic tone
 """
+
 
         try:
             response = gemini_model.generate_content(prompt)
