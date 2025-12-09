@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supportapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supportapp
+  template:
+    metadata:
+      labels:
+        app: supportapp
+    spec:
+      containers:
+      - name: supportapp
+        image: nazina/supportapp:latest
+        ports:
+        - containerPort: 8000   # FastAPI
+        - containerPort: 8501   # Streamlit
+        env:
+        - name: S3_BUCKET
+          value: "customer-complaint-model-store"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: aws_key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: aws_secret
+
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: gemini 
